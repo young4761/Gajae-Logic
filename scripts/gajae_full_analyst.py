@@ -118,42 +118,71 @@ def fetch_serp_news(query="한국 증시"):
     except: return []
 
 # ─────────────────────────────────────────
-# 4. 분석 로직
+# 4. 고급 분석 로직 (Scoring System)
 # ─────────────────────────────────────────
 
-def analyze_market_condition(score, vix_val):
-    """n8n 정량적 수식 적용"""
-    try:
-        vix_str = str(vix_val).replace(",", "")
-        vix = float(vix_str)
-    except:
-        vix = 20.0
+# 가중치 설정 (Weights)
+W_FG = 0.4    # Fear & Greed 가중치
+W_VIX = 0.3   # VIX 가중치
+W_NEWS = 0.3  # 뉴스 심리 가중치
 
-    if score < 25 or score > 74 or vix >= 30:
-        return "DANGER", True, f"🚨 [변동성 확대/역발상 기회] 탐욕지수가 극단치({score})이거나 VIX({vix})가 높아 매매를 고려합니다."
-    elif score < 50 or vix >= 20:
-        return "CAUTION", False, f"⚠️ [시장 관망] 탐욕지수({score}) 또는 VIX({vix})가 경계 수준에 있어 매매를 보류합니다."
+# 임계값 설정 (Thresholds)
+TH_TRADE_HIGH = 75  # 적극 매매 구간
+TH_TRADE_MIN = 50   # 보수 매매 구간
+
+def calculate_market_score(fg_score, vix_val, pos_news, neg_news):
+    """지표별 점수 산출 및 통합 점수 계산"""
+    
+    # 1. F&G 점수 (0-100 그대로 활용)
+    s_fg = fg_score
+    
+    # 2. VIX 점수 (역산: 15이하=100, 30이상=0)
+    try:
+        vix = float(str(vix_val).replace(",", ""))
+        if vix <= 15: s_vix = 100
+        elif vix >= 30: s_vix = 0
+        else: s_vix = 100 - ((vix - 15) * (100 / 15))
+    except:
+        s_vix = 50
+        
+    # 3. 뉴스 점수 (0-100)
+    total_news = pos_news + neg_news
+    if total_news == 0:
+        s_news = 50
     else:
-        return "NORMAL", False, f"✅ [안정적 시장] 시장 지표가 안정적(F&G: {score})이므로 오늘 매매는 쉽니다."
+        s_news = (pos_news / total_news) * 100
+        
+    # 종합 점수 계산
+    total_score = (s_fg * W_FG) + (s_vix * W_VIX) + (s_news * W_NEWS)
+    
+    # 기여도 분석
+    contributions = {
+        "공탐지수": round(s_fg * W_FG, 1),
+        "VIX": round(s_vix * W_VIX, 1),
+        "뉴스심리": round(s_news * W_NEWS, 1)
+    }
+    
+    return round(total_score, 1), contributions
+
+def analyze_market_condition(total_score):
+    """종합 점수 기반 매매 판단"""
+    if total_score >= TH_TRADE_HIGH:
+        return "🚨 DANGER/HIGH", True, 1.2, "시장 에너지가 매우 강하거나 역발상 기회가 큽니다. 적극적 매매를 검토합니다."
+    elif total_score >= TH_TRADE_MIN:
+        return "⚠️ CAUTION", True, 0.8, "시장이 완만한 회복세 또는 경계 구간에 있습니다. 보수적 매매를 검토합니다."
+    else:
+        return "✅ NORMAL/STABLE", False, 0.0, "지표가 기준 미달이거나 너무 안정적입니다. 관망을 유지합니다."
 
 def analyze_news_sentiment(news_items):
     """알고파 뉴스 심리 분석"""
     pos_total, neg_total = 0, 0
-    top_news = []
     
     for item in news_items[:10]:
         content = (item.get("title", "") + " " + item.get("snippet", "")).lower()
-        pos_count = sum(1 for kw in POSITIVE_KEYWORDS if kw in content)
-        neg_count = sum(1 for kw in NEGATIVE_KEYWORDS if kw in content)
-        
-        sentiment = "⚪"
-        if pos_count >= 3: sentiment = "🟢"; pos_total += 1
-        elif neg_count >= 2: sentiment = "🔴"; neg_total += 1
-        
-        if sentiment != "⚪":
-            top_news.append(f"{sentiment} {item.get('title')}")
+        if any(kw in content for kw in POSITIVE_KEYWORDS): pos_total += 1
+        if any(kw in content for kw in NEGATIVE_KEYWORDS): neg_total += 1
             
-    return pos_total, neg_total, top_news
+    return pos_total, neg_total
 
 # ─────────────────────────────────────────
 # 5. 보고서 생성 및 전송
@@ -163,42 +192,48 @@ def generate_briefing():
     now_str = datetime.now().strftime("%Y-%m-%d")
     
     # 데이터 수집
-    score, rating = fetch_fear_and_greed()
+    score_fg, rating_fg = fetch_fear_and_greed()
     indices = fetch_market_indices()
     news = fetch_serp_news()
     
     # 분석
-    condition, trade_allowed, reason = analyze_market_condition(score, indices["vix"]["price"])
-    pos_news, neg_news, important_headlines = analyze_news_sentiment(news)
+    pos_news, neg_news = analyze_news_sentiment(news)
+    total_score, contr = calculate_market_score(score_fg, indices["vix"]["price"], pos_news, neg_news)
+    condition, trade_allowed, risk_mult, reason = analyze_market_condition(total_score)
+    
+    # 기여도 상위 정렬
+    sorted_contr = sorted(contr.items(), key=lambda x: x[1], reverse=True)
+    contr_str = ", ".join([f"{k}({v}점)" for k, v in sorted_contr])
     
     # 브리핑 조립
     lines = [
-        f"📊 <b>오늘의 시황 브리핑</b> · {now_str}",
+        f"📊 <b>오늘의 시황 종합 분석</b> · {now_str}",
         "",
-        "<b>📈 시장 지표</b>",
-        f"• 공탐지수: {score} ({rating})",
+        f"<b>🎯 종합 시장 점수: {total_score} / 100</b>",
+        f"• 상태: {condition} (리스크 배율: {risk_mult}x)",
+        f"• 기여도: {contr_str}",
+        "",
+        "<b>📈 세부 지표</b>",
+        f"• 공탐지수: {score_fg} ({rating_fg})",
         f"• VIX: {indices['vix']['price']} ({indices['vix']['movement']})",
-        f"• S&P500: {indices['sp500']['price']} ({indices['sp500']['movement']})",
-        f"• 원/달러: {indices['usd_krw']['price']} ({indices['usd_krw']['movement']})",
-        f"• 코스피: {indices['kospi']['price']} ({indices['kospi']['movement']})",
+        f"• 뉴스: 긍정 {pos_news}건, 부정 {neg_news}건",
+        f"• 원/달러: {indices['usd_krw']['price']}",
         "",
-        "<b>🧠 시황 해석</b>",
-        f"- 현재 시장은 {condition} 상태입니다.",
+        "<b>🧠 전략적 해석</b>",
         f"- {reason}",
-        f"- 뉴스 감지: 긍정 {pos_news}건, 부정 {neg_news}건이 포착되었습니다." if (pos_news+neg_news)>0 else "- 특이한 뉴스 흐름은 발견되지 않았습니다.",
         "",
-        "<b>⚡ 매매 판단</b>",
-        f"{condition} — {'실전 매매를 검토합니다.' if trade_allowed else '보수적 접근이 필요합니다.'}",
-        "",
-        f"{'✅ 오늘 매매: 진행' if trade_allowed else '❌ 오늘 매매: 보류'}",
+        f"{'✅ 실전 매매: 진행' if trade_allowed else '❌ 실전 매매: 보류'}",
         "",
         "────────────────",
-        "<i>가재(Gajae)의 독립 분석 보고입니다.</i> 🦞"
+        "<i>Gajae Advanced Logic System</i> 🦞"
     ]
     
     return "\n".join(lines)
 
 def send_to_telegram(text):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ 텔레그램 설정이 없습니다.")
+        return False
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -214,12 +249,15 @@ def send_to_telegram(text):
         return False
 
 if __name__ == "__main__":
-    print("🚀 가재 통합 분석 시스템 기동...")
+    print("🚀 가재 고급 분석 시스템 기동...")
     briefing = generate_briefing()
     print("\n[생성된 브리핑]")
     print(briefing)
-    print("\n텔레그램 전송 중...")
+    
+    # 실제 전송 여부 확인 (환경변수나 설정을 통해 제어 가능)
+    # 여기서는 시연을 위해 전송 시도
+    print("\n텔레그램 보고 전송 중...")
     if send_to_telegram(briefing):
-        print("✅ 텔레그램 보고 완료")
+        print("✅ 보고 완료")
     else:
-        print("❌ 텔레그램 전송 실패")
+        print("❌ 전송 실패")

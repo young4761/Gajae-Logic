@@ -2,15 +2,29 @@
 
 This document consolidates all the quantitative analysis logic and market judgment formulas developed for the "Gajae" AI assistant.
 
-## 1. Quantitative Market Condition Formulas
+## 1. Advanced Market Scoring System (v2.0)
 
-The primary logic used to determine whether to execute trades based on global market indicators.
+Instead of individual indicators, we now use a composite **TOTAL_MARKET_SCORE (0-100)** to determine trading actions.
 
-| Status | Formula (Logic) | Action | Reasoning Template |
+### 🧮 Math Formulas
+
+| Component | Weight | Calculation (Normalization) |
+| :--- | :--- | :--- |
+| **Fear & Greed (FG)** | 40% (0.4) | `Score = FG_Index_Value` (0-100) |
+| **Volatility (VIX)** | 30% (0.3) | `Score = 15(100) to 30(0) range inversion` |
+| **News Sentiment** | 30% (0.3) | `Score = (Positive / Total_News) * 100` |
+
+**Total Score** = `(FG_Score * 0.4) + (VIX_Score * 0.3) + (Sentiment_Score * 0.3)`
+
+---
+
+### 🚦 Trade Judgment Thresholds
+
+| Status | Total Score | Risk Multiplier | Action |
 | :--- | :--- | :--- | :--- |
-| **🚨 DANGER** | `F&G < 25` OR `F&G > 74` OR `VIX >= 30` | **✅ TRADE** | `🚨 [Volatility/Contrarian] F&G at extreme (${score}) or VIX high (${vix}).` |
-| **⚠️ CAUTION** | `F&G < 50` OR `VIX >= 20` | **❌ WAIT** | `⚠️ [Wait] F&G (${score}) or VIX (${vix}) at caution levels.` |
-| **✅ NORMAL** | All other cases | **❌ WAIT** | `✅ [Stable] Market indices are normal (F&G: ${score}).` |
+| **🚨 DANGER/HIGH** | `>= 75` | **1.2x** | **✅ ACTIVE TRADE** (High energy/Opportunity) |
+| **⚠️ CAUTION** | `>= 50` | **0.8x** | **✅ CONSERVATIVE** (Recovery/Edge) |
+| **✅ NORMAL** | `< 50` | **0.0x** | **❌ WAIT** (Stable or Low Signal) |
 
 ---
 
