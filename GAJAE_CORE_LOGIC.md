@@ -56,36 +56,24 @@ Logic used for analyzing headlines and determining market psychological state.
 
 ---
 
-## 4. Trading Implementation Strategy
+## 4. Visual Reporting & Intelligence (v2.1)
 
-### Automated Workflow (Gajae-System)
-1. **Collector**: Python scripts collect data (F&G, VIX, KOSPI, USD/KRW).
-2. **Analyzer**: Applies the formulas above to set `CONDITION` and `TRADE_ALLOWED`.
-3. **Execution**: If `TRADE_ALLOWED` is TRUE, send commands to the execution layer (`chapter_7`).
+The system now features automated **Visual Trend Analysis** to help human analysts spot patterns over time.
 
-### Report Structure
-```text
-📊 오늘의 시황 브리핑 · {yyyy-MM-dd}
+### 📈 Market Trend Graphs
+Every daily briefing includes a 15-day trend graph containing:
+- **Total Market Score**: A line chart showing the composite score relative to Danger/Caution zones.
+- **Volatility (VIX)**: A trend line tracking the fear index.
 
-📈 시장 지표
-• 공탐지수: {score} ({rating})
-• VIX: {vix}
-• S&P500 선물: {sp500}
-• 원/달러: {usd_krw}
-• 코스피: {kospi}
-
-🧠 시황 해석
-(Correlation-based analysis, e.g., "Rising USD/KRW is pressuring KOSPI")
-
-⚡ 매매 판단
-{CONDITION} — {Short reasoning}
-
-✅ 오늘 매매: 진행 / ❌ 오늘 매매: 보류
-```
+### 📂 Data Persistence
+Historical data is stored in the workspace for long-term analysis:
+- **File**: `workspace/scripts/gajae_history.csv`
+- **Columns**: `date`, `total_score`, `vix` (Used for automatic plot generation).
 
 ---
 
 ## 5. Professional Rules (Behavioral Guidelines)
+...
 - **Conciseness**: Reports must be kept under 15 lines.
 - **Analysis over Data**: Always explain *why* an indicator matters, don't just list the number.
 - **Strict Honestly**: Never exaggerate system capabilities (GAJAE Integrity Rule).

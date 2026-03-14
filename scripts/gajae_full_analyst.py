@@ -184,12 +184,70 @@ def analyze_news_sentiment(news_items):
             
     return pos_total, neg_total
 
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+import asyncio
+from telegram import Bot
+
+# 데이터 보관 파일 경로
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), "gajae_history.csv")
+
+def update_history(date_str, score, vix):
+    """지표 데이터를 CSV에 누적 저장"""
+    new_data = pd.DataFrame([[date_str, score, vix]], columns=["date", "total_score", "vix"])
+    if os.path.exists(HISTORY_FILE):
+        df = pd.read_csv(HISTORY_FILE)
+        # 중복 날짜 방지
+        if date_str not in df['date'].values:
+            df = pd.concat([df, new_data], ignore_index=True)
+    else:
+        df = new_data
+    df.to_csv(HISTORY_FILE, index=False)
+    return df.tail(15) # 최근 15일 데이터 반환
+
+def plot_market_report(df):
+    """시황 변화 그래프 생성 (사용자 제안 코드 기반)"""
+    plt.rc('font', family='Malgun Gothic') # 한글 폰트 (Windows 기준)
+    plt.rcParams['axes.unicode_minus'] = False
+    
+    fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    
+    # 위: TOTAL_MARKET_SCORE
+    axes[0].plot(df['date'], df['total_score'], marker='o', label='Market Score', color='blue')
+    axes[0].axhline(75, color='red', linestyle='--', alpha=0.5, label='DANGER (75)')
+    axes[0].axhline(50, color='orange', linestyle='--', alpha=0.5, label='CAUTION (50)')
+    axes[0].legend()
+    axes[0].set_title('Gajae Market Score Trend')
+    axes[0].grid(True, alpha=0.3)
+    
+    # 아래: VIX
+    vix_prices = []
+    for val in df['vix']:
+        try: vix_prices.append(float(str(val).replace(",", "")))
+        except: vix_prices.append(20.0)
+        
+    axes[1].plot(df['date'], vix_prices, color='orange', marker='s', label='VIX Index')
+    axes[1].legend()
+    axes[1].set_title('Volatility (VIX) Trend')
+    axes[1].grid(True, alpha=0.3)
+    
+    plt.xticks(rotation=45)
+    fig.tight_layout()
+    
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150)
+    buf.seek(0)
+    plt.close()
+    return buf
+
 # ─────────────────────────────────────────
 # 5. 보고서 생성 및 전송
 # ─────────────────────────────────────────
 
-def generate_briefing():
+async def generate_and_send_report():
     now_str = datetime.now().strftime("%Y-%m-%d")
+    print(f"[{now_str}] 분석 시작...")
     
     # 데이터 수집
     score_fg, rating_fg = fetch_fear_and_greed()
@@ -201,11 +259,14 @@ def generate_briefing():
     total_score, contr = calculate_market_score(score_fg, indices["vix"]["price"], pos_news, neg_news)
     condition, trade_allowed, risk_mult, reason = analyze_market_condition(total_score)
     
-    # 기여도 상위 정렬
+    # 히스토리 업데이트 및 데이터 로드
+    df_history = update_history(now_str, total_score, indices["vix"]["price"])
+    
+    # 기여도 정렬
     sorted_contr = sorted(contr.items(), key=lambda x: x[1], reverse=True)
     contr_str = ", ".join([f"{k}({v}점)" for k, v in sorted_contr])
     
-    # 브리핑 조립
+    # 텍스트 브리핑 구성
     lines = [
         f"📊 <b>오늘의 시황 종합 분석</b> · {now_str}",
         "",
@@ -225,39 +286,30 @@ def generate_briefing():
         f"{'✅ 실전 매매: 진행' if trade_allowed else '❌ 실전 매매: 보류'}",
         "",
         "────────────────",
-        "<i>Gajae Advanced Logic System</i> 🦞"
+        "<i>Gajae Visual Intelligence System</i> 🦞"
     ]
+    briefing_text = "\n".join(lines)
     
-    return "\n".join(lines)
-
-def send_to_telegram(text):
+    # 텔레그램 전송 (텍스트 + 그래프)
+    print("\n[생성된 브리핑 요약]")
+    print(f"점수: {total_score}, 상태: {condition}")
+    
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ 텔레그램 설정이 없습니다.")
-        return False
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True
-    }
+        print("⚠️ 텔레그램 설정이 없습니다. 로컬 출력으로 대체합니다.")
+        return
+        
     try:
-        res = requests.post(url, json=payload, timeout=15)
-        return res.ok
+        bot = Bot(token=TELEGRAM_TOKEN)
+        # 1. 시황 그래프 생성
+        photo_buf = plot_market_report(df_history)
+        
+        # 2. 메시지 및 사진 전송 (async 호출)
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=briefing_text, parse_mode='HTML')
+        await bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=photo_buf, caption=f"Market Trend Report ({now_str})")
+        print("✅ 텔레그램 보고 및 그래프 전송 완료")
     except Exception as e:
-        print(f"⚠️ 텔레그램 전송 오류: {e}")
-        return False
+        print(f"❌ 전송 실패: {e}")
 
 if __name__ == "__main__":
-    print("🚀 가재 고급 분석 시스템 기동...")
-    briefing = generate_briefing()
-    print("\n[생성된 브리핑]")
-    print(briefing)
-    
-    # 실제 전송 여부 확인 (환경변수나 설정을 통해 제어 가능)
-    # 여기서는 시연을 위해 전송 시도
-    print("\n텔레그램 보고 전송 중...")
-    if send_to_telegram(briefing):
-        print("✅ 보고 완료")
-    else:
-        print("❌ 전송 실패")
+    print("🚀 가재 시각 분석 시스템 기동...")
+    asyncio.run(generate_and_send_report())
