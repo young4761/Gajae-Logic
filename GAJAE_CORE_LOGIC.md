@@ -28,17 +28,27 @@ Instead of individual indicators, we now use a composite **TOTAL_MARKET_SCORE (0
 
 ---
 
-## 2. News Sentiment Analysis Logic
+## 2. Weighted News Sentiment System (v2.5)
 
-Logic used for analyzing headlines and determining market psychological state.
+To improve accuracy, we use a **Weight-Based Scoring** method rather than simple counting. Each keyword has an impact score that shifts the news component.
 
-### Keywords
-- **Positive**: `계약 체결`, `수주`, `흑자 전환`, `대규모 투자`, `신제품 출시`, `MOU`, `상한가`, `돌파`, `강세`
-- **Negative**: `적자`, `소송`, `횡령`, `배임`, `상장폐지`, `대주주 매도`, `공매도`, `하한가`, `급락`, `약세`
+### ⚖️ Keyword Weights
+| Impact | Weight | Keywords |
+| :--- | :--- | :--- |
+| **🚨 Critical Negative** | `-2.0` | 상장폐지, 법정관리, 어닝쇼크 |
+| **🔴 Moderate Negative** | `-1.0` | 적자, 소송, 급락, 하한가, 약세 |
+| **🟢 Critical Positive** | `+2.0` | 어닝서프라이즈, 흑자전환, 대규모투자 |
+| **🟢 Moderate Positive** | `+1.0` | 수주, 신제품출시, MOU, 돌파, 강세 |
 
-### Thresholds
-- **🟢 Positive Sentiment**: `pos_count >= 3`
-- **🔴 Negative Sentiment**: `neg_count >= 2`
+---
+
+### 📡 Segmented Intelligence
+The system performs two separate searches to distinguish general market sentiment from specific theme/stock trends:
+1. **Market News Score**: Focused on "국내 증시 시황" (General Market).
+2. **Stock News Score**: Focused on "반도체 2차전지 실적 전망" (Specific Themes).
+
+**Total News Component** = `(Market_Score * 0.2) + (Stock_Score * 0.2)`
+*(Individual scores are normalized to a 0-100 scale, where 50 is Neutral).*
 
 ---
 
