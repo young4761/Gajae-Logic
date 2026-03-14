@@ -1,0 +1,31 @@
+{
+  "parameters": {
+    "method": "POST",
+    "url": "http://172.17.0.1:18789/v1/chat/completions",
+    "sendHeaders": true,
+    "headerParameters": {
+      "parameters": [
+        {
+          "name": "Authorization",
+          "value": "Bearer 51c1b91a4225895f962644bf524072ef64e91b068cf2b2c7"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "{\n  \"provider\": \"fireworks\",\n  \"model\": \"fireworks/accounts/fireworks/models/glm-5\",\n  \"max_tokens\": 500,\n  \"temperature\": 0.3,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a quantitative market analyst. Analyze the provided market data and write a concise Korean morning briefing for a Discord alert.\\n\\n## Output Format (strictly follow this structure)\\n\\n📊 **오늘의 시황 브리핑** · {date}\\n\\n**📈 시장 지표**\\n• 공탐지수: {fear_greed_score} ({fear_greed_rating})\\n• VIX: {vix} ({vix_movement})\\n• S&P500 선물: {sp500_futures} ({sp500_futures_movement})\\n• 원/달러: {usd_krw} ({usd_krw_movement})\\n• 코스피: {kospi} ({kospi_movement})\\n\\n**🧠 시황 해석**\\n(2~3줄. 지표 간 상관관계 기반 핵심만. 수치 반복 금지.)\\n\\n**⚡ 매매 판단**\\n{condition} — (판단 근거 1줄)\\n\\n**✅ 오늘 매매:** 진행 or ❌ 오늘 매매: 보류\\n\\n## Rules\\n- 총 응답은 15줄 이내\\n- 시황 해석은 데이터를 단순 나열하지 말고 지표 간 관계를 해석할 것\\n- condition이 DANGER일 때는 위험/기회 양면을 모두 언급할 것\\n- 숫자 포맷: 소수점 2자리, 환율은 정수\\n- Discord 렌더링 기준으로 bold/bullet 사용, 코드블록 사용 금지\\n- 한국어로 작성\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"아래 시장 데이터를 분석해서 오늘의 시황 브리핑을 작성해줘.\\n\\ndate: {{ $now.toFormat('yyyy-MM-dd') }}\\nfear_greed_score: {{ $json.fear_greed_score }}\\nfear_greed_rating: {{ $json.fear_greed_rating }}\\nvix: {{ $json.vix }}\\nvix_movement: {{ $json.vix_movement }}\\nsp500_futures: {{ $json.sp500_futures }}\\nsp500_futures_movement: {{ $json.sp500_futures_movement }}\\nusd_krw: {{ $json.usd_krw }}\\nusd_krw_movement: {{ $json.usd_krw_movement }}\\nkospi: {{ $json.kospi }}\\nkospi_movement: {{ $json.kospi_movement }}\\ncondition: {{ $json.condition }}\\ntrade_allowed: {{ $json.trade_allowed }}\\nsentiment_label: {{ $json.sentiment_label }}\"\n    }\n  ]\n}",
+    "options": {}
+  },
+  "id": "14e211f4-49b7-41ec-9e6f-778ff1fdf6bd",
+  "name": "Call OpenClaw Gateway",
+  "type": "n8n-nodes-base.httpRequest",
+  "typeVersion": 4.1,
+  "position": [
+    -9600,
+    -2800
+  ]
+}

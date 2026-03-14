@@ -1,0 +1,13 @@
+{
+  "parameters": {
+    "jsCode": "\n// 가재(Gajae)가 생성한 브리핑을 텔레그램으로 전송합니다.\nconst briefing = $json.choices?.[0]?.message?.content || $json.aiContent;\n\nif (!briefing) {\n  throw new Error('가재가 브리핑 내용을 생성하지 않았습니다.');\n}\n\nconst token = '7970537683:AAH0QmWImg0LKzEjHY7fn5kWwcpgIzVmoWY';\nconst chatId = '1290448372';\n\n// 텔레그램 메시지 전송\ntry {\n  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      chat_id: chatId,\n      text: briefing,\n      parse_mode: 'Markdown'\n    })\n  });\n\n  const result = await response.json();\n\n  return {\n    success: response.ok,\n    message_id: result.result?.message_id,\n    status_code: response.status,\n    briefing_preview: briefing.substring(0, 50) + \"...\"\n  };\n} catch (error) {\n  return {\n    success: false,\n    error: error.message\n  };\n}\n"
+  },
+  "id": "gajae-telegram-send-v2",
+  "name": "가재 → Telegram",
+  "type": "n8n-nodes-base.code",
+  "typeVersion": 2,
+  "position": [
+    -9296,
+    -2800
+  ]
+}

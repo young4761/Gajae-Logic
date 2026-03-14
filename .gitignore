@@ -1,0 +1,22 @@
+# Git ignore file for OpenClaw Workspace
+
+# Secrets
+.env
+*.env
+credentials/
+identity/device-auth.json
+
+# Temporary files
+/tmp/
+*.log
+*.tmp
+*.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS
+.DS_Store
+Thumbs.db
